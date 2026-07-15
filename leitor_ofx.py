@@ -1,5 +1,5 @@
 from decimal import Decimal, InvalidOperation
-from io import BytesIO
+from io import StringIO
 import re
 
 import pandas as pd
@@ -10,6 +10,39 @@ from ofxparse import OfxParser
 st.set_page_config(page_title="Leitor de OFX", layout="wide")
 
 AMOUNT_TAG_PATTERN = re.compile(r"(<[A-Z0-9_.-]*AMT>)([^<\r\n]+)", re.IGNORECASE)
+CHARSET_PATTERN = re.compile(r"(?im)^CHARSET:\s*([^\r\n]+)")
+
+
+def detecta_encodings_ofx(conteudo):
+    cabecalho = conteudo[:4096].decode("ascii", errors="ignore")
+    charset_match = CHARSET_PATTERN.search(cabecalho)
+
+    encodings = []
+    if charset_match:
+        charset = charset_match.group(1).strip().upper()
+        mapa_charsets = {
+            "1252": "cp1252",
+            "437": "cp437",
+            "65001": "utf-8",
+            "ANSI": "cp1252",
+            "USASCII": "ascii",
+            "UTF-8": "utf-8",
+            "UTF8": "utf-8",
+            "WINDOWS-1252": "cp1252",
+            "ISO-8859-1": "latin-1",
+            "8859-1": "latin-1",
+            "LATIN1": "latin-1",
+            "NONE": "latin-1",
+        }
+        encodings.append(mapa_charsets.get(charset, charset.lower()))
+
+    encodings.extend(["utf-8", "cp1252", "latin-1"])
+
+    encodings_unicos = []
+    for encoding in encodings:
+        if encoding not in encodings_unicos:
+            encodings_unicos.append(encoding)
+    return encodings_unicos
 
 
 def normaliza_decimal(value):
@@ -37,14 +70,14 @@ def normaliza_decimal(value):
 def normaliza_conteudo_ofx(ofx_file):
     conteudo = ofx_file.getvalue()
 
-    for encoding in ("utf-8", "latin-1", "cp1252"):
+    for encoding in detecta_encodings_ofx(conteudo):
         try:
             texto = conteudo.decode(encoding)
             break
         except UnicodeDecodeError:
             continue
     else:
-        texto = conteudo.decode("utf-8", errors="ignore")
+        texto = conteudo.decode("latin-1", errors="replace")
 
     def substitui_valor(match):
         tag, valor = match.groups()
@@ -58,7 +91,7 @@ def normaliza_conteudo_ofx(ofx_file):
 
 def carrega_ofx(ofx_file):
     conteudo_normalizado = normaliza_conteudo_ofx(ofx_file)
-    return OfxParser.parse(BytesIO(conteudo_normalizado.encode("utf-8")))
+    return OfxParser.parse(StringIO(conteudo_normalizado))
 
 
 def formata_valor(value):
