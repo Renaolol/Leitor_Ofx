@@ -107,6 +107,10 @@ def normaliza_historico(memo):
 
 
 def historicos_selecionados(historicos, key_prefix):
+    if st.button("Selecionar todos", key=f"selecionar_todos_{key_prefix}", use_container_width=True):
+        for historico in historicos:
+            st.session_state[f"{key_prefix}_{historico}"] = True
+
     selecionados = []
     for historico in historicos:
         checkbox_key = f"{key_prefix}_{historico}"
