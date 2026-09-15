@@ -1,5 +1,5 @@
 from decimal import Decimal, InvalidOperation
-from io import StringIO
+from io import BytesIO
 import re
 
 import pandas as pd
@@ -74,10 +74,11 @@ def normaliza_conteudo_ofx(ofx_file):
         try:
             texto = conteudo.decode(encoding)
             break
-        except UnicodeDecodeError:
+        except (LookupError, UnicodeDecodeError):
             continue
     else:
         texto = conteudo.decode("latin-1", errors="replace")
+        encoding = "latin-1"
 
     def substitui_valor(match):
         tag, valor = match.groups()
@@ -86,12 +87,16 @@ def normaliza_conteudo_ofx(ofx_file):
         except InvalidOperation:
             return match.group(0)
 
-    return AMOUNT_TAG_PATTERN.sub(substitui_valor, texto)
+    # O ofxparse interpreta o cabeçalho do arquivo para escolher a codificação.
+    # Portanto, o conteúdo precisa voltar a ser bytes na mesma codificação de
+    # origem. Passar uma StringIO faz a biblioteca tentar codificar o texto em
+    # Latin-1, que falha para caracteres válidos de OFX, como "†" (U+2021).
+    return AMOUNT_TAG_PATTERN.sub(substitui_valor, texto).encode(encoding)
 
 
 def carrega_ofx(ofx_file):
     conteudo_normalizado = normaliza_conteudo_ofx(ofx_file)
-    return OfxParser.parse(StringIO(conteudo_normalizado))
+    return OfxParser.parse(BytesIO(conteudo_normalizado))
 
 
 def formata_valor(value):
