@@ -11,6 +11,7 @@ st.set_page_config(page_title="Leitor de OFX", layout="wide")
 
 AMOUNT_TAG_PATTERN = re.compile(r"(<[A-Z0-9_.-]*AMT>)([^<\r\n]+)", re.IGNORECASE)
 CHARSET_PATTERN = re.compile(r"(?im)^CHARSET:\s*([^\r\n]+)")
+ENCODING_PATTERN = re.compile(r"(?im)^ENCODING:\s*[^\r\n]+")
 
 
 def detecta_encodings_ofx(conteudo):
@@ -87,11 +88,13 @@ def normaliza_conteudo_ofx(ofx_file):
         except InvalidOperation:
             return match.group(0)
 
-    # O ofxparse interpreta o cabeçalho do arquivo para escolher a codificação.
-    # Portanto, o conteúdo precisa voltar a ser bytes na mesma codificação de
-    # origem. Passar uma StringIO faz a biblioteca tentar codificar o texto em
-    # Latin-1, que falha para caracteres válidos de OFX, como "†" (U+2021).
-    return AMOUNT_TAG_PATTERN.sub(substitui_valor, texto).encode(encoding)
+    # O cabeçalho pode declarar uma codificação incorreta. Por exemplo, alguns
+    # bancos enviam texto UTF-8 com ``CHARSET:1252``. O ofxparse usa o cabeçalho
+    # para decodificar os bytes, então sempre emitimos conteúdo e cabeçalho em
+    # UTF-8 para que os dois permaneçam consistentes.
+    texto = ENCODING_PATTERN.sub("ENCODING:UTF-8", texto, count=1)
+    texto = CHARSET_PATTERN.sub("CHARSET:NONE", texto, count=1)
+    return AMOUNT_TAG_PATTERN.sub(substitui_valor, texto).encode("utf-8")
 
 
 def carrega_ofx(ofx_file):
