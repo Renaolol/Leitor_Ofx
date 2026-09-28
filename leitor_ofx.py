@@ -148,8 +148,10 @@ if ofx_file is not None:
 
     df = pd.DataFrame(lista_transacoes, columns=["Tipo", "Data", "Valor", "Histórico"])
     df["Valor"] = df["Valor"].apply(normaliza_decimal)
-    df_creditos = df[df["Tipo"] == "credit"]
-    df_debitos = df[df["Tipo"] == "debit"]
+    # O tipo (TRNTYPE) varia por banco (dep, cash, xfer, credit, debit...),
+    # então classificamos entrada/saída pelo sinal do valor, que é confiável.
+    df_creditos = df[df["Valor"] >= 0]
+    df_debitos = df[df["Valor"] < 0]
 
     historicos_credito = sorted(df_creditos["Histórico"].dropna().unique(), key=str.lower)
     historicos_debito = sorted(df_debitos["Histórico"].dropna().unique(), key=str.lower)
